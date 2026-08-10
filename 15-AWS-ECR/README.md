@@ -1,5 +1,942 @@
-# 15 AWS ECR
+<div align="center">
 
-Amazon ECR image workflow.
+# ☁️ Amazon ECR — Complete Zero-to-Hero Masterclass
 
-Add detailed notes, demos and class material to this folder.
+### 🚀 Build → Authenticate → Push → Scan → Pull → Deploy on AWS | VishwaTech Labs
+
+[![AWS](https://img.shields.io/badge/AWS-ECR-FF9900?logo=amazonaws&logoColor=white)](https://aws.amazon.com/ecr/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/)
+[![IAM](https://img.shields.io/badge/AWS-IAM-red?logo=amazonaws&logoColor=white)](https://docs.aws.amazon.com/iam/)
+[![ECR](https://img.shields.io/badge/Registry-Private-blue)](#-ecr-architecture)
+[![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub%20OIDC-blueviolet)](#-github-actions--ecr)
+
+**Master Amazon Elastic Container Registry from first push to production-grade CI/CD with GitHub Actions OIDC.**
+
+</div>
+
+---
+
+# 🎯 What Is Amazon ECR?
+
+Amazon Elastic Container Registry (ECR) is AWS's managed container registry service.
+
+It stores and distributes container images and supports private registry workflows.
+
+Official documentation:
+
+- [Amazon ECR](https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html)
+- [ECR CLI reference](https://docs.aws.amazon.com/cli/latest/reference/ecr/)
+- [ECR authentication](https://docs.aws.amazon.com/AmazonECR/latest/userguide/registry_auth.html)
+
+---
+
+# 🏗️ 1. ECR Architecture
+
+```text
+Developer
+    │
+    ▼
+Docker Build
+    │
+    ▼
+Local Image
+    │
+    ▼
+AWS Authentication
+    │
+    ▼
+Amazon ECR
+    │
+    ├── ECS
+    ├── EKS
+    ├── EC2
+    └── Other Authorized Runtimes
+```
+
+---
+
+# 📦 2. ECR Repository
+
+Example:
+
+```text
+myapp
+```
+
+An ECR repository contains container image artifacts.
+
+Repository URI generally looks like:
+
+```text
+ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/myapp
+```
+
+Example:
+
+```text
+123456789012.dkr.ecr.us-east-1.amazonaws.com/myapp
+```
+
+Use your own AWS account and region.
+
+---
+
+# 🌎 3. Region Matters
+
+ECR repositories are regional.
+
+If your repository is in:
+
+```text
+us-east-1
+```
+
+authenticate and operate against:
+
+```text
+us-east-1
+```
+
+If your repository is in:
+
+```text
+eu-north-1
+```
+
+use:
+
+```text
+eu-north-1
+```
+
+A common mistake is authenticating against one region and pushing to another.
+
+---
+
+# 🏗️ 4. Create Repository
+
+AWS CLI:
+
+```bash
+aws ecr create-repository \
+  --repository-name myapp \
+  --region us-east-1
+```
+
+Verify:
+
+```bash
+aws ecr describe-repositories \
+  --repository-names myapp \
+  --region us-east-1
+```
+
+---
+
+# 🔍 5. AWS Identity
+
+Before working with ECR:
+
+```bash
+aws sts get-caller-identity
+```
+
+This helps verify:
+
+```text
+AWS Account
+IAM Principal
+Current credentials
+```
+
+Never paste credentials into source code.
+
+---
+
+# 🔐 6. IAM and ECR
+
+Authentication:
+
+```text
+Who are you?
+```
+
+Authorization:
+
+```text
+What can you do?
+```
+
+ECR permissions should be limited to required actions.
+
+A CI push role typically needs permissions for:
+
+```text
+ECR authentication
+Repository/image upload operations
+Image manifest operations
+```
+
+A runtime pulling an image should generally only need pull-related permissions.
+
+---
+
+# 🔑 7. ECR Docker Login
+
+Common AWS CLI flow:
+
+```bash
+aws ecr get-login-password \
+  --region us-east-1 \
+| docker login \
+  --username AWS \
+  --password-stdin \
+  ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
+```
+
+Then Docker can authenticate to the ECR registry according to the IAM permissions of the AWS principal.
+
+---
+
+# 🐳 8. Build Image
+
+```bash
+docker build \
+  -t myapp:1.0.0 \
+  .
+```
+
+Verify:
+
+```bash
+docker image ls
+```
+
+---
+
+# 🏷️ 9. Tag for ECR
+
+```bash
+docker tag \
+  myapp:1.0.0 \
+  ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/myapp:1.0.0
+```
+
+Architecture:
+
+```text
+Local Image
+     │
+     ▼
+ECR Repository URI
+     │
+     ▼
+Tag
+```
+
+---
+
+# 🚀 10. Push
+
+```bash
+docker push \
+  ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/myapp:1.0.0
+```
+
+Flow:
+
+```text
+Docker Image
+    ↓
+ECR Login
+    ↓
+docker push
+    ↓
+Amazon ECR
+```
+
+---
+
+# 📥 11. Pull
+
+Authenticate:
+
+```bash
+aws ecr get-login-password \
+  --region us-east-1 \
+| docker login \
+  --username AWS \
+  --password-stdin \
+  ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
+```
+
+Pull:
+
+```bash
+docker pull \
+  ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/myapp:1.0.0
+```
+
+---
+
+# 🔢 12. Image Tags
+
+Examples:
+
+```text
+1.0.0
+1.1.0
+2.0.0
+latest
+<commit-sha>
+```
+
+For production:
+
+```text
+release tag
++
+commit SHA
++
+digest
+```
+
+Use immutable deployment references where exact artifact identity matters.
+
+---
+
+# 🧬 13. Digest
+
+An image can be referenced by digest:
+
+```text
+ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/myapp@sha256:<digest>
+```
+
+Concept:
+
+```text
+Tag
+ ↓
+Human-friendly
+
+Digest
+ ↓
+Exact content identity
+```
+
+Record the digest generated by ECR rather than inventing one.
+
+---
+
+# 🛡️ 14. ECR Security
+
+Production security:
+
+```text
+☑ IAM least privilege
+☑ Private repositories
+☑ Strong authentication
+☑ OIDC for CI where possible
+☑ Image scanning
+☑ Encryption
+☑ Lifecycle policies
+☑ Access logging/monitoring
+☑ Controlled tags
+☑ Digest tracking
+```
+
+---
+
+# 🔍 15. Image Scanning
+
+ECR supports image vulnerability scanning capabilities.
+
+Concept:
+
+```text
+Push
+ ↓
+ECR
+ ↓
+Scan
+ ↓
+Findings
+ ↓
+Remediation
+```
+
+Scanning is one component of defense-in-depth and does not replace secure Dockerfile design, dependency management, or runtime hardening.
+
+---
+
+# 🧹 16. Lifecycle Policies
+
+Container registries can accumulate old images.
+
+Example:
+
+```text
+1.0.0
+1.0.1
+1.0.2
+...
+1.100.0
+```
+
+Use ECR lifecycle policies to manage old images according to your retention requirements.
+
+Concept:
+
+```text
+Old images
+    ↓
+Retention policy
+    ↓
+Cleanup
+```
+
+Do not delete images that active deployments still depend on.
+
+---
+
+# 🔐 17. Encryption
+
+ECR supports encryption for stored image data.
+
+AWS environments may use AWS-managed encryption or customer-managed KMS keys depending on repository configuration and organizational requirements.
+
+For regulated workloads:
+
+```text
+ECR
+ ↓
+Encryption
+ ↓
+KMS / AWS-managed key strategy
+```
+
+Design key permissions carefully.
+
+---
+
+# 🌐 18. ECR and VPC
+
+Depending on architecture, private AWS networking can be designed so workloads access AWS services without requiring broad public internet paths.
+
+Relevant concepts include:
+
+```text
+VPC
+Private subnets
+VPC endpoints / PrivateLink
+Security groups
+Route tables
+DNS
+```
+
+Design the network according to your AWS environment and required service access.
+
+---
+
+# ☁️ 19. ECR + ECS
+
+Architecture:
+
+```text
+Developer
+   ↓
+GitHub Actions
+   ↓
+ECR
+   ↓
+ECS
+   ↓
+Container
+```
+
+ECS pulls the image from ECR using an appropriate task execution role.
+
+---
+
+# ☸️ 20. ECR + EKS
+
+Architecture:
+
+```text
+GitHub Actions
+      ↓
+     ECR
+      ↓
+     EKS
+      ↓
+     Pod
+      ↓
+Container
+```
+
+The workload/node identity must have appropriate permissions to pull private images according to the EKS configuration.
+
+---
+
+# 💻 21. ECR + EC2
+
+Architecture:
+
+```text
+EC2
+ │
+ ├── Docker
+ │
+ └── ECR Pull
+       ↓
+     Image
+```
+
+The EC2 workload should use an appropriate IAM role/identity mechanism rather than embedding long-lived AWS credentials.
+
+---
+
+# 🚀 22. GitHub Actions + ECR
+
+Best-practice architecture:
+
+```text
+GitHub
+   │
+   ▼
+GitHub Actions
+   │
+   │ OIDC
+   ▼
+AWS IAM
+   │
+   ▼
+Temporary Credentials
+   │
+   ▼
+Amazon ECR
+   │
+   ▼
+ECS / EKS
+```
+
+---
+
+# 🔐 23. OIDC
+
+GitHub Actions can use OpenID Connect to obtain short-lived AWS credentials through an IAM role.
+
+Concept:
+
+```text
+No long-lived AWS access key
+             ↓
+        GitHub OIDC
+             ↓
+         AWS IAM Role
+             ↓
+    Temporary Credentials
+```
+
+Official:
+
+[GitHub OIDC](https://docs.github.com/en/actions/concepts/security/openid-connect)
+
+---
+
+# 🧩 24. GitHub Actions ECR Workflow
+
+```yaml
+name: Build and Push to ECR
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/myapp:${{ github.sha }}
+```
+
+Replace:
+
+```text
+AWS_ROLE_ARN
+region
+repository name
+```
+
+with your environment.
+
+For high-assurance environments, review/pin action versions according to your supply-chain policy.
+
+---
+
+# 🔑 25. IAM Trust Policy Concept
+
+The IAM role should trust the GitHub OIDC provider and restrict the trust relationship to the intended repository/environment/branch claims.
+
+Concept:
+
+```text
+GitHub Repository
+      ↓
+OIDC Token
+      ↓
+IAM Trust Policy
+      ↓
+Allowed?
+ ├── No → Deny
+ └── Yes
+       ↓
+Temporary Role Credentials
+```
+
+Avoid broad trust such as:
+
+```text
+Any GitHub repository
+```
+
+---
+
+# 🧪 26. Hands-On Labs
+
+### Lab 01 — AWS Identity
+
+```bash
+aws sts get-caller-identity
+```
+
+### Lab 02 — Create ECR Repository
+
+```bash
+aws ecr create-repository \
+  --repository-name myapp \
+  --region us-east-1
+```
+
+### Lab 03 — Authenticate Docker
+
+Use:
+
+```bash
+aws ecr get-login-password
+```
+
+### Lab 04 — Build
+
+```bash
+docker build -t myapp:1.0.0 .
+```
+
+### Lab 05 — Tag
+
+Tag for ECR.
+
+### Lab 06 — Push
+
+Push the image.
+
+### Lab 07 — Pull
+
+Pull the image.
+
+### Lab 08 — ECR Permissions
+
+Create a least-privilege push policy.
+
+### Lab 09 — Pull-Only Role
+
+Create an identity intended only to pull images.
+
+### Lab 10 — Lifecycle Policy
+
+Create a retention policy.
+
+### Lab 11 — Image Scan
+
+Review vulnerability findings.
+
+### Lab 12 — Digest Deployment
+
+Record an image digest and deploy by digest.
+
+### Lab 13 — GitHub OIDC
+
+Configure GitHub → AWS trust.
+
+### Lab 14 — GitHub Actions Push
+
+Build and push to ECR.
+
+### Lab 15 — ECR + ECS
+
+Deploy the ECR image to ECS.
+
+### Lab 16 — ECR + EKS
+
+Deploy the ECR image to Kubernetes.
+
+### Lab 17 — ECR + EC2
+
+Pull from ECR using an EC2 IAM role.
+
+### Lab 18 — Private Networking
+
+Study ECR access from private subnets.
+
+### Lab 19 — KMS
+
+Study repository encryption and KMS permissions.
+
+### Lab 20 — Enterprise Pipeline
+
+Build:
+
+```text
+GitHub
+ ↓
+Actions
+ ↓
+OIDC
+ ↓
+IAM
+ ↓
+ECR
+ ↓
+Scan
+ ↓
+ECS/EKS
+```
+
+---
+
+# 🚨 27. Troubleshooting
+
+## `no basic auth credentials`
+
+Check:
+
+```text
+ECR login
+AWS region
+AWS identity
+Docker credential state
+```
+
+## `AccessDeniedException`
+
+Check:
+
+```text
+IAM policy
+Trust policy
+Repository
+Region
+Role
+```
+
+## `repository does not exist`
+
+Check:
+
+```bash
+aws ecr describe-repositories \
+  --repository-names myapp \
+  --region us-east-1
+```
+
+## `manifest unknown`
+
+Check:
+
+```text
+Repository
+Tag
+Digest
+Region
+```
+
+## ECS/EKS Cannot Pull
+
+Check:
+
+```text
+IAM permissions
+Image URI
+Region
+Network
+Registry authentication
+Task/workload identity
+```
+
+---
+
+# 🏢 28. Enterprise ECR Architecture
+
+```text
+                     Developer
+                         │
+                         ▼
+                    GitHub Repo
+                         │
+                         ▼
+                   GitHub Actions
+                         │
+                         │ OIDC
+                         ▼
+                     AWS IAM
+                         │
+                  Temporary Access
+                         │
+                         ▼
+                       ECR
+                  ┌──────┼──────┐
+                  ▼      ▼      ▼
+                Scan  Retain  Audit
+                  │
+                  ▼
+              Deployment
+             ┌────┼────┐
+             ▼    ▼    ▼
+            ECS  EKS  EC2
+```
+
+---
+
+# 🔐 29. Production ECR Checklist
+
+```text
+☑ Private repository
+☑ Least-privilege IAM
+☑ OIDC for GitHub Actions
+☑ No long-lived CI AWS keys
+☑ Image scanning
+☑ Lifecycle policy
+☑ Encryption
+☑ KMS strategy where required
+☑ Digest tracking
+☑ Controlled tags
+☑ Pull-only runtime permissions
+☑ Network design reviewed
+☑ Monitoring/auditing
+☑ Backup/recovery considerations
+```
+
+---
+
+# 🎓 30. Interview Questions
+
+1. What is Amazon ECR?
+2. ECR vs Docker Hub?
+3. What is an ECR repository?
+4. What is an ECR registry URI?
+5. Why is ECR regional?
+6. How do you authenticate Docker to ECR?
+7. What is `get-login-password`?
+8. What IAM permissions are needed to push?
+9. What permissions are needed to pull?
+10. How do you secure ECR?
+11. What is ECR image scanning?
+12. What are lifecycle policies?
+13. How does ECR encryption work?
+14. What is ECR with ECS?
+15. What is ECR with EKS?
+16. How does EC2 pull from ECR?
+17. What is GitHub OIDC?
+18. Why is OIDC better than long-lived AWS keys?
+19. How do you restrict an OIDC trust policy?
+20. How do you deploy an ECR image by digest?
+21. How do you troubleshoot `AccessDeniedException`?
+22. How do you troubleshoot `ImagePullBackOff`?
+23. How would you secure production ECR?
+24. Design GitHub Actions → ECR → EKS.
+25. Design GitHub Actions → ECR → ECS.
+
+---
+
+# ⚡ Cheat Sheet
+
+```bash
+# Identity
+aws sts get-caller-identity
+
+# Create repository
+aws ecr create-repository \
+  --repository-name myapp \
+  --region us-east-1
+
+# Login
+aws ecr get-login-password \
+  --region us-east-1 \
+| docker login \
+  --username AWS \
+  --password-stdin \
+  ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
+
+# Build
+docker build -t myapp:1.0.0 .
+
+# Tag
+docker tag \
+  myapp:1.0.0 \
+  ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/myapp:1.0.0
+
+# Push
+docker push \
+  ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/myapp:1.0.0
+
+# Pull
+docker pull \
+  ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/myapp:1.0.0
+
+# Repository details
+aws ecr describe-repositories \
+  --repository-names myapp \
+  --region us-east-1
+```
+
+---
+
+<div align="center">
+
+# ☁️ Amazon ECR
+
+### Build → Authenticate → Push → Scan → Pull → Deploy
+
+**VishwaTech Labs By Vishwanath Gowda H**
+
+</div>
