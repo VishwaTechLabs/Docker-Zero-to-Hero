@@ -1,0 +1,19 @@
+name: Validate Docker Repository
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check repository structure
+        run: |
+          test -f README.md
+          test -f Docker-Complete-Documentation.md
+          echo "Repository structure validated."
